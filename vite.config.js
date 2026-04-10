@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+codex/implement-core-product-features
+export default defineConfig({
+  plugins: [react()],
 codex/add-supabase-integration-to-vite-react-app
 export default defineConfig({
   plugins: [react()]
@@ -12,5 +15,6 @@ export default defineConfig({
 export default defineConfig({
   plugins: [react()],
   base: process.env.VITE_BASE_PATH || '/'
+main
 main
 });
