@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+codex/add-supabase-integration-to-vite-react-app
+export default defineConfig({
+  plugins: [react()]
 /**
  * GitHub Pages project-site support:
  * - Set VITE_BASE_PATH to '/your-repo-name/' in workflow/env.
@@ -9,4 +12,5 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   base: process.env.VITE_BASE_PATH || '/'
+main
 });

@@ -1,3 +1,23 @@
+codex/add-supabase-integration-to-vite-react-app
+# NCAA26 Prediction Market (Vite + React + Supabase)
+
+This starter uses Supabase Auth magic links and a basic display-name profile flow for a private friend-group site.
+
+## 1) Install dependencies
+
+```bash
+npm install
+```
+
+## 2) Configure environment variables
+
+Copy `.env.example` to `.env` and fill in your Supabase values:
+
+```bash
+cp .env.example .env
+```
+
+Required variables:
 codex/document-project-rules-for-ncaa-site
 # NCAA 26 Dynasty Prediction Market (Parody)
 
@@ -274,9 +294,37 @@ Assumed backend rules:
 ### 2) Add repository secrets
 
 Add these Actions secrets:
+main
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+
+codex/add-supabase-integration-to-vite-react-app
+> Do not commit real secrets. Only the anon/publishable key belongs in the client.
+
+## 3) Configure Supabase Auth
+
+In your Supabase project dashboard:
+
+1. Enable **Email** provider under Authentication.
+2. Ensure **Magic Link** sign-in is enabled.
+3. Add your local app URL (`http://localhost:5173`) as an allowed redirect URL.
+
+## 4) Run the app
+
+```bash
+npm run dev
+```
+
+Open the printed local URL (usually `http://localhost:5173`).
+
+## Included flows
+
+- Magic link sign-in by email.
+- Session persistence across refreshes.
+- Display-name setup/update after login.
+- Sign out.
+- UI placeholder text clarifying this is for a private friend-group site.
 
 ### 3) Push to `main`
 
@@ -303,4 +351,5 @@ If you rename the repo, deployment keeps working because workflow derives the pa
 - Implement auth flows (email OTP or OAuth)
 - Persist picks and market states in Supabase tables
 - Add RLS policies for one-pick-per-user integrity
+main
 main
