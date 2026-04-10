@@ -3,10 +3,71 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+codex/implement-core-product-features
     <title>Totally Legit Sportsbook (Parody)</title>
+codex/add-supabase-integration-to-vite-react-app
+    <title>NCAA26 Prediction Market</title>
+codex/document-project-rules-for-ncaa-site
+    <title>NCAA 26 Prediction Market (Parody)</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>NCAA 26 Dynasty Prediction Market</h1>
+      <p class="disclaimer">Entertainment only. No real gambling.</p>
+      <div id="authStatus"></div>
+    </header>
+
+    <main class="layout">
+      <section class="card" id="authCard">
+        <h2>Sign In / Sign Up</h2>
+        <form id="authForm" class="stack">
+          <input id="email" type="email" placeholder="Email" required />
+          <input id="password" type="password" placeholder="Password" required />
+          <div class="row">
+            <button type="submit" data-mode="signin">Sign In</button>
+            <button type="button" id="signupBtn">Sign Up</button>
+            <button type="button" id="signoutBtn" class="hidden">Sign Out</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Markets</h2>
+        <div id="markets" class="stack"></div>
+      </section>
+
+      <section class="card">
+        <h2>Leaderboard</h2>
+        <div id="leaderboard" class="stack"></div>
+      </section>
+
+      <section class="card hidden" id="adminCard">
+        <h2>Admin</h2>
+        <form id="marketForm" class="stack">
+          <input id="marketTitle" placeholder="Market title" required />
+          <input id="marketDesc" placeholder="Description" />
+          <input id="optionA" placeholder="Option A" required />
+          <input id="optionB" placeholder="Option B" required />
+          <button type="submit">Create Market</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+    <title>NCAA 26 Dynasty Prediction Market</title>
+main
+main
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+codex/implement-core-product-features
+codex/add-supabase-integration-to-vite-react-app
+main
+main
+main
   </body>
 </html>

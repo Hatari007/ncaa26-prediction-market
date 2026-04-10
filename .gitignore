@@ -1,0 +1,10 @@
+codex/document-project-rules-for-ncaa-site
+config.js
+node_modules
+dist
+.env
+.env.*
+!.env.example
+.DS_Store
+.vscode
+main
