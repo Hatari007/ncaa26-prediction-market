@@ -1,20 +1,32 @@
 {
   "name": "ncaa26-prediction-market",
   "private": true,
+codex/add-supabase-integration-to-vite-react-app
   "version": "0.0.0",
+  "version": "0.1.0",
+main
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+codex/add-supabase-integration-to-vite-react-app
     "preview": "vite preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.55.0",
+    "preview": "vite preview",
+    "lint": "echo 'No linter configured to keep dependencies minimal.'"
+  },
+  "dependencies": {
+main
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+codex/add-supabase-integration-to-vite-react-app
     "@vitejs/plugin-react": "^4.3.2",
+    "@vitejs/plugin-react": "^4.4.0",
+main
     "vite": "^5.4.10"
   }
 }
