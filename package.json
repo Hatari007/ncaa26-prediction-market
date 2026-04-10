@@ -1,5 +1,11 @@
 {
   "name": "ncaa26-prediction-market",
+codex/implement-leaderboard-logic-for-predictions
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test"
   "private": true,
 codex/implement-core-product-features
   "version": "0.0.0",
@@ -40,5 +46,6 @@ codex/add-supabase-integration-to-vite-react-app
 main
 main
     "vite": "^5.4.10"
+main
   }
 }
