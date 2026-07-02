@@ -1,522 +1,474 @@
-codex/implement-core-product-features
-import { useEffect, useMemo, useState } from 'react';
-import { AuthGate } from './components/AuthGate';
-import { DisplayNameSetup } from './components/DisplayNameSetup';
-import { MarketSection } from './components/MarketSection';
-import { Leaderboard } from './components/Leaderboard';
-import { AdminPanel } from './components/AdminPanel';
-import { supabase } from './lib/supabase';
+import { useMemo, useState } from 'react';
 
-function classifyMarkets(markets) {
-  const now = new Date();
-  const open = [];
-  const locked = [];
-  const resolved = [];
+const STORAGE_KEY = 'wotwtc-state-v1';
+const SESSION_KEY = 'wotwtc-player-id';
 
-  for (const market of markets) {
-    if (market.resolved_option_id) {
-      resolved.push(market);
-    } else if (new Date(market.lock_time) <= now) {
-      locked.push(market);
-    } else {
-      open.push(market);
-    }
-  }
+const playersSeed = [
+  { id: 'frank', displayName: 'Frank', dynastyTeam: 'Tennessee', role: 'admin', logo: 'T', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2633.png' },
+  { id: 'jeff', displayName: 'Jeff', dynastyTeam: 'Texas', role: 'user', logo: 'TX', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/251.png' },
+  { id: 'aus', displayName: 'Aus', dynastyTeam: 'Iowa', role: 'user', logo: 'IA', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2294.png' },
+  { id: 'matt', displayName: 'Matt', dynastyTeam: 'TCU', role: 'user', logo: 'TCU', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2628.png' },
+  { id: 'bryan', displayName: 'Bryan', dynastyTeam: 'Georgia Tech', role: 'user', logo: 'GT', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/59.png' },
+  { id: 'tom', displayName: 'Tom', dynastyTeam: 'Stanford', role: 'user', logo: 'S', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/24.png' },
+  { id: 'eric', displayName: 'Eric', dynastyTeam: 'Rice', role: 'user', logo: 'R', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/242.png' },
+  { id: 'mired', displayName: 'Mired', dynastyTeam: 'USC', role: 'user', logo: 'SC', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/30.png' },
+];
 
-  return { open, locked, resolved };
+const defaultSiteCopy = {
+  loginEyebrow: 'NCAA 26 Dynasty Market',
+  siteTitle: 'Waiting on the World to Change',
+  loginIntro: 'Fake odds, real bragging rights. No money, no payouts, no bookie — just your friends being confidently wrong.',
+  heroEyebrow: 'No-cash sportsbook parody',
+  heroSubtitle: 'Private NCAA dynasty markets. Fake odds. Real group-chat receipts.',
+  disclaimer: 'Entertainment only. No real gambling, no money exchanged, no prizes beyond deeply annoying bragging rights.',
+};
+
+const marketsSeed = [
+  {
+    id: 'tcu-iowa',
+    title: 'Who will win TCU vs. Iowa?',
+    description: 'Semifinal pick. Locks at kickoff by commissioner button, not by a clock.',
+    status: 'open',
+    lockLabel: 'Kickoff',
+    pointValue: 1,
+    options: [
+      { id: 'tcu', label: 'TCU' },
+      { id: 'iowa', label: 'Iowa' },
+    ],
+    resolvedOptionId: null,
+  },
+  {
+    id: 'tennessee-texas',
+    title: 'Who will win Tennessee vs. Texas?',
+    description: 'Semifinal pick. Locks at kickoff by commissioner button, not by a clock.',
+    status: 'open',
+    lockLabel: 'Kickoff',
+    pointValue: 1,
+    options: [
+      { id: 'tennessee', label: 'Tennessee' },
+      { id: 'texas', label: 'Texas' },
+    ],
+    resolvedOptionId: null,
+  },
+  {
+    id: 'national-championship',
+    title: 'Who will win the National Championship?',
+    description: 'Pick the champion from the remaining field. Double points, double pressure.',
+    status: 'open',
+    lockLabel: 'Kickoff',
+    pointValue: 2,
+    options: [
+      { id: 'texas', label: 'Texas' },
+      { id: 'iowa', label: 'Iowa' },
+      { id: 'tennessee', label: 'Tennessee' },
+      { id: 'tcu', label: 'TCU' },
+    ],
+    resolvedOptionId: null,
+  },
+];
+
+function buildInitialState() {
+  return { players: playersSeed, markets: marketsSeed, picks: [], siteCopy: defaultSiteCopy };
 }
 
-function mapMarketRows(markets, picksByMarket, picksByOption) {
-  return markets.map((market) => ({
-    ...market,
-    options: market.options.map((option) => ({
-      ...option,
-      pick_count: picksByOption.get(option.id) ?? 0,
-    })),
-    user_pick_option_id: picksByMarket.get(market.id) ?? null,
-  }));
+function hydratePlayers(players = []) {
+  const seedById = new Map(playersSeed.map((player) => [player.id, player]));
+  return players.map((player) => ({ ...(seedById.get(player.id) ?? {}), ...player, logoUrl: player.logoUrl || seedById.get(player.id)?.logoUrl }));
 }
 
-async function fetchData(userId) {
-  const [{ data: profile, error: profileError }, { data: marketsRaw, error: marketsError }, { data: picksRaw, error: picksError }, { data: allPicksRaw, error: allPicksError }] =
-    await Promise.all([
-      supabase.from('profiles').select('id, display_name, is_admin').eq('id', userId).maybeSingle(),
-      supabase
-        .from('markets')
-        .select('id, title, description, lock_time, resolved_option_id, created_at, options:market_options(id, label)')
-        .order('created_at', { ascending: false }),
-      supabase.from('picks').select('market_id, option_id').eq('user_id', userId),
-      supabase.from('picks').select('market_id, option_id, user_id, markets!inner(resolved_option_id)'),
-    ]);
-
-  if (profileError || marketsError || picksError || allPicksError) {
-    throw new Error(profileError?.message || marketsError?.message || picksError?.message || allPicksError?.message);
-  }
-
-  const picksByMarket = new Map((picksRaw ?? []).map((pick) => [pick.market_id, pick.option_id]));
-  const picksByOption = new Map();
-
-  for (const pick of allPicksRaw ?? []) {
-    picksByOption.set(pick.option_id, (picksByOption.get(pick.option_id) ?? 0) + 1);
-  }
-
-  const markets = mapMarketRows(marketsRaw ?? [], picksByMarket, picksByOption);
-
-  const leaderboardMap = new Map();
-  for (const pick of allPicksRaw ?? []) {
-    const resolvedOption = pick.markets?.resolved_option_id;
-    if (!resolvedOption) continue;
-    const entry = leaderboardMap.get(pick.user_id) ?? { user_id: pick.user_id, correct_count: 0, resolved_count: 0 };
-    entry.resolved_count += 1;
-    if (resolvedOption === pick.option_id) {
-      entry.correct_count += 1;
-    }
-    leaderboardMap.set(pick.user_id, entry);
-  }
-
-  const userIds = [...leaderboardMap.keys()];
-  const { data: leaderboardProfiles, error: leaderboardProfileError } = userIds.length
-    ? await supabase.from('profiles').select('id, display_name').in('id', userIds)
-    : { data: [], error: null };
-
-  if (leaderboardProfileError) {
-    throw new Error(leaderboardProfileError.message);
-  }
-
-  const nameByUserId = new Map((leaderboardProfiles ?? []).map((p) => [p.id, p.display_name ?? 'Unknown Degenerate']));
-
-  const leaderboard = [...leaderboardMap.values()]
-    .map((row) => ({ ...row, display_name: nameByUserId.get(row.user_id) ?? 'Anonymous Sharpshooter' }))
-    .sort((a, b) => b.correct_count - a.correct_count || b.resolved_count - a.resolved_count);
-
-  return { profile, markets, leaderboard };
-}
-
-export default function App() {
-  return (
-    <AuthGate>
-      {(user) => <AppShell user={user} />}
-    </AuthGate>
-  );
-}
-
-function AppShell({ user }) {
-  const [tab, setTab] = useState('home');
-  const [profile, setProfile] = useState(null);
-  const [markets, setMarkets] = useState([]);
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [pendingPickId, setPendingPickId] = useState(null);
-  const [nowIso, setNowIso] = useState(new Date().toISOString());
-
-  // Refresh clock every minute so open/locked sections move without full refresh.
-  useEffect(() => {
-    const timer = setInterval(() => setNowIso(new Date().toISOString()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const reload = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const payload = await fetchData(user.id);
-      setProfile(payload.profile);
-      setMarkets(payload.markets);
-      setLeaderboard(payload.leaderboard);
-    } catch (e) {
-      setError(e.message || 'Failed to load data.');
-    } finally {
-      setLoading(false);
-    }
+function normalizeState(state) {
+  return {
+    ...buildInitialState(),
+    ...state,
+    players: state?.players?.length ? hydratePlayers(state.players) : playersSeed,
+    markets: state?.markets?.length ? state.markets : marketsSeed,
+    picks: state?.picks ?? [],
+    siteCopy: { ...defaultSiteCopy, ...(state?.siteCopy ?? {}) },
   };
-
-  useEffect(() => {
-    reload();
-  }, [user.id]);
-
-  const grouped = useMemo(() => classifyMarkets(markets), [markets]);
-
-  const saveDisplayName = async (displayName) => {
-    setBusy(true);
-    setError('');
-    const { error: upsertError } = await supabase
-      .from('profiles')
-      .upsert({ id: user.id, display_name: displayName, is_admin: false }, { onConflict: 'id' });
-    if (upsertError) {
-      setError(upsertError.message);
-    } else {
-      await reload();
-    }
-    setBusy(false);
-  };
-
-  const handlePick = async (marketId, optionId) => {
-    setPendingPickId(marketId);
-    setError('');
-
-    const market = markets.find((m) => m.id === marketId);
-    if (!market) {
-      setError('Market not found.');
-      setPendingPickId(null);
-      return;
-    }
-
-    if (market.user_pick_option_id) {
-      setError('You already made a pick for this market.');
-      setPendingPickId(null);
-      return;
-    }
-
-    if (new Date(market.lock_time) <= new Date() || market.resolved_option_id) {
-      setError('This market is locked.');
-      setPendingPickId(null);
-      return;
-    }
-
-    const { error: pickError } = await supabase.from('picks').insert({
-      user_id: user.id,
-      market_id: marketId,
-      option_id: optionId,
-    });
-
-    if (pickError) {
-      setError(pickError.message);
-    } else {
-      await reload();
-    }
-
-    setPendingPickId(null);
-  };
-
-  const adminAction = async (action) => {
-    setBusy(true);
-    setError('');
-    try {
-      await action();
-      await reload();
-    } catch (e) {
-      setError(e.message || 'Admin action failed.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (loading) return <div className="center-card">Loading markets...</div>;
-
-  if (!profile?.display_name) {
-    return (
-      <div className="shell">
-        {error && <p className="error-banner">{error}</p>}
-        <DisplayNameSetup onSave={saveDisplayName} loading={busy} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="shell">
-      <header className="topbar">
-        <div>
-          <h1>🎲 Totally Legit Sportsbook</h1>
-          <p className="muted">Welcome, {profile.display_name}</p>
-        </div>
-        <div className="top-actions">
-          <button className={tab === 'home' ? 'active' : ''} onClick={() => setTab('home')}>Home</button>
-          <button className={tab === 'leaderboard' ? 'active' : ''} onClick={() => setTab('leaderboard')}>Leaderboard</button>
-          {profile.is_admin && (
-            <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Admin</button>
-          )}
-          <button onClick={() => supabase.auth.signOut()}>Sign out</button>
-        </div>
-      </header>
-
-      <p className="disclaimer">Entertainment only. No real gambling, no prizes, no tears (okay maybe a few tears).</p>
-      {error && <p className="error-banner">{error}</p>}
-
-      {tab === 'home' && (
-        <main className="stack">
-          <MarketSection title="Open Markets" markets={grouped.open} nowIso={nowIso} onPick={handlePick} pendingPickId={pendingPickId} />
-          <MarketSection title="Locked Markets" markets={grouped.locked} nowIso={nowIso} onPick={handlePick} pendingPickId={pendingPickId} />
-          <MarketSection title="Resolved Markets" markets={grouped.resolved} nowIso={nowIso} onPick={handlePick} pendingPickId={pendingPickId} />
-        </main>
-      )}
-
-      {tab === 'leaderboard' && <Leaderboard rows={leaderboard} />}
-
-      {tab === 'admin' && profile.is_admin && (
-        <AdminPanel
-          markets={markets}
-          busy={busy}
-          onCreate={(payload) =>
-            adminAction(async () => {
-              if (!payload.title?.trim()) throw new Error('Title is required.');
-              if (!payload.lock_time) throw new Error('Lock time is required.');
-              const { error } = await supabase.from('markets').insert({
-                title: payload.title.trim(),
-                description: payload.description?.trim() || '',
-                lock_time: new Date(payload.lock_time).toISOString(),
-              });
-              if (error) throw error;
-            })
-          }
-          onUpdate={(marketId, values) =>
-            adminAction(async () => {
-              const { error } = await supabase.from('markets').update(values).eq('id', marketId);
-              if (error) throw error;
-            })
-          }
-          onAddOption={(marketId, label) =>
-            adminAction(async () => {
-              const { error } = await supabase.from('market_options').insert({ market_id: marketId, label });
-              if (error) throw error;
-            })
-          }
-          onResolve={(marketId, optionId) =>
-            adminAction(async () => {
-              const { error } = await supabase.from('markets').update({ resolved_option_id: optionId }).eq('id', marketId);
-              if (error) throw error;
-            })
-          }
-        />
-      )}
-    </div>
-  );
 }
-codex/add-supabase-integration-to-vite-react-app
-import { useEffect, useMemo, useState } from 'react';
-import { supabase } from './lib/supabase';
 
-function App() {
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [sendingLink, setSendingLink] = useState(false);
-  const [message, setMessage] = useState('');
+function loadState() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? normalizeState(JSON.parse(stored)) : buildInitialState();
+  } catch {
+    return buildInitialState();
+  }
+}
 
-  const user = useMemo(() => session?.user ?? null, [session]);
+function saveState(nextState) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+}
 
-  useEffect(() => {
-    let mounted = true;
+function calculateLeaderboard(players, markets, picks) {
+  return players
+    .map((player) => {
+      const playerPicks = picks.filter((pick) => pick.playerId === player.id);
+      let points = 0;
+      let correct = 0;
+      let resolvedPicks = 0;
 
-    async function initializeAuth() {
-      const {
-        data: { session: currentSession }
-      } = await supabase.auth.getSession();
-
-      if (mounted) {
-        setSession(currentSession);
-        if (currentSession?.user?.user_metadata?.display_name) {
-          setDisplayName(currentSession.user.user_metadata.display_name);
+      for (const pick of playerPicks) {
+        const market = markets.find((item) => item.id === pick.marketId);
+        if (!market || market.status !== 'resolved') continue;
+        resolvedPicks += 1;
+        if (pick.optionId === market.resolvedOptionId) {
+          correct += 1;
+          points += Number(market.pointValue || 1);
         }
-        setLoading(false);
       }
-    }
 
-    initializeAuth();
+      return {
+        ...player,
+        points,
+        correct,
+        resolvedPicks,
+        accuracy: resolvedPicks ? Math.round((correct / resolvedPicks) * 100) : 0,
+      };
+    })
+    .sort((a, b) => b.points - a.points || b.correct - a.correct || a.displayName.localeCompare(b.displayName));
+}
 
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, updatedSession) => {
-      setSession(updatedSession);
-      setMessage('');
-
-      const profileName = updatedSession?.user?.user_metadata?.display_name || '';
-      setDisplayName(profileName);
-      setLoading(false);
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const handleMagicLinkSignIn = async (event) => {
-    event.preventDefault();
-    setMessage('');
-    setSendingLink(true);
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: window.location.origin
-      }
-    });
-
-    if (error) {
-      setMessage(`Could not send magic link: ${error.message}`);
-    } else {
-      setMessage('Magic link sent! Check your email to finish sign in.');
-    }
-
-    setSendingLink(false);
-  };
-
-  const handleProfileSave = async (event) => {
-    event.preventDefault();
-    setMessage('');
-    setSavingProfile(true);
-
-    const normalized = displayName.trim();
-
-    if (!normalized) {
-      setMessage('Please enter a display name before saving.');
-      setSavingProfile(false);
-      return;
-    }
-
-    const { error } = await supabase.auth.updateUser({
-      data: {
-        display_name: normalized
-      }
-    });
-
-    if (error) {
-      setMessage(`Could not update display name: ${error.message}`);
-    } else {
-      setMessage('Display name saved. You are ready for your private friend-group site.');
-    }
-
-    setSavingProfile(false);
-  };
-
-  const handleSignOut = async () => {
-    setMessage('');
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      setMessage(`Could not sign out: ${error.message}`);
-    } else {
-      setMessage('Signed out successfully.');
-    }
-  };
-
-  if (loading) {
-    return <main className="page"><p>Loading session…</p></main>;
+function getPickCounts(market, picks) {
+  const counts = new Map(market.options.map((option) => [option.id, 0]));
+  for (const pick of picks.filter((item) => item.marketId === market.id)) {
+    counts.set(pick.optionId, (counts.get(pick.optionId) || 0) + 1);
   }
+  return counts;
+}
+
+function TeamBadge({ player }) {
+  return (
+    <span className="team-badge" title={`${player.dynastyTeam} logo`}>
+      {player.logoUrl ? <img src={player.logoUrl} alt={`${player.dynastyTeam} logo`} loading="lazy" /> : player.logo}
+    </span>
+  );
+}
+
+function LoginScreen({ players, siteCopy, onLogin }) {
+  const [selected, setSelected] = useState(players[0]?.id || '');
 
   return (
-    <main className="page">
-      <section className="card">
-        <h1>NCAA26 Prediction Market</h1>
-        <p className="muted">
-          Placeholder app: this login and profile setup is intended for a private friend-group site,
-          not a public social network.
-        </p>
-
-        {!user ? (
-          <form onSubmit={handleMagicLinkSignIn} className="stack">
-            <label htmlFor="email">Email for magic link sign in</label>
-            <input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              placeholder="friend@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-            <button type="submit" disabled={sendingLink}>
-              {sendingLink ? 'Sending link…' : 'Send magic link'}
-            </button>
-          </form>
-        ) : (
-          <>
-            <p>
-              Signed in as <strong>{user.email}</strong>
-            </p>
-
-            <form onSubmit={handleProfileSave} className="stack">
-              <label htmlFor="displayName">Display name</label>
-              <input
-                id="displayName"
-                type="text"
-                required
-                placeholder="How friends should see you"
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-              />
-              <button type="submit" disabled={savingProfile}>
-                {savingProfile ? 'Saving…' : 'Save display name'}
-              </button>
-            </form>
-
-            <button type="button" className="ghost" onClick={handleSignOut}>
-              Sign out
-            </button>
-          </>
-        )}
-
-        {message && <p className="message">{message}</p>}
+    <main className="login-shell">
+      <section className="login-card">
+        <p className="eyebrow">{siteCopy.loginEyebrow}</p>
+        <h1>{siteCopy.siteTitle}</h1>
+        <p className="hero-copy">{siteCopy.loginIntro}</p>
+        <label>
+          Choose your display name
+          <select value={selected} onChange={(event) => setSelected(event.target.value)}>
+            {players.map((player) => (
+              <option key={player.id} value={player.id}>{player.displayName} · {player.dynastyTeam}</option>
+            ))}
+          </select>
+        </label>
+        <button className="primary-btn" onClick={() => onLogin(selected)}>Enter the book</button>
+        <p className="fine-print">Entertainment only. Display-name login is intentionally casual for this private group.</p>
       </section>
     </main>
   );
 }
 
-export default App;
-import { useMemo, useState } from 'react';
-import Header from './components/Header';
-import AuthPanel from './components/AuthPanel';
-import HomePage from './pages/HomePage';
-import LeaderboardPage from './pages/LeaderboardPage';
-import AdminPage from './pages/AdminPage';
-import { leaderboard, markets } from './data/mockData';
+function MarketCard({ market, picks, players, currentPlayer, onPick }) {
+  const userPick = picks.find((pick) => pick.marketId === market.id && pick.playerId === currentPlayer.id);
+  const counts = getPickCounts(market, picks);
+  const totalPicks = [...counts.values()].reduce((sum, value) => sum + value, 0);
+  const showPublicPicks = market.status !== 'open';
+  const playerById = new Map(players.map((player) => [player.id, player]));
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  return (
+    <article className={`market-card market-${market.status}`}>
+      <div className="market-topline">
+        <span className="status-pill">{market.status}</span>
+        <span>{market.pointValue} pt{market.pointValue === 1 ? '' : 's'}</span>
+      </div>
+      <h3>{market.title}</h3>
+      <p>{market.description}</p>
+      <div className="market-meta">
+        <span>🔒 Locks: {market.lockLabel}</span>
+        <span>🎟️ Picks: {totalPicks}</span>
+      </div>
+      <div className="option-stack">
+        {market.options.map((option) => {
+          const count = counts.get(option.id) || 0;
+          const percent = totalPicks ? Math.round((count / totalPicks) * 100) : 0;
+          const selected = userPick?.optionId === option.id;
+          const winner = market.resolvedOptionId === option.id;
+          const optionPickers = picks
+            .filter((pick) => pick.marketId === market.id && pick.optionId === option.id)
+            .map((pick) => playerById.get(pick.playerId)?.displayName || 'Unknown');
+          return (
+            <button
+              key={option.id}
+              className={`option-btn ${selected ? 'selected' : ''} ${winner ? 'winner' : ''}`}
+              disabled={market.status !== 'open'}
+              onClick={() => onPick(market.id, option.id)}
+            >
+              <span className="option-main">
+                <span>{option.label}</span>
+                {showPublicPicks && <small>{optionPickers.length ? optionPickers.join(', ') : 'No picks'}</small>}
+              </span>
+              {showPublicPicks ? <span>{count} · {percent}%</span> : <span>{selected ? 'Your pick' : 'Pick'}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {market.status === 'open' && userPick && <p className="hint">You can change this pick until Frank locks the market.</p>}
+      {market.status === 'locked' && <p className="hint">Picks are public now that the market is locked.</p>}
+      {market.status === 'resolved' && <p className="winner-line">Winner: {market.options.find((option) => option.id === market.resolvedOptionId)?.label}</p>}
+    </article>
+  );
+}
 
-function getInitialPageFromHash() {
-  const hash = window.location.hash.replace('#', '');
-  return ['home', 'leaderboard', 'admin'].includes(hash) ? hash : 'home';
+function Leaderboard({ rows }) {
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <p className="eyebrow">Season Leaderboard</p>
+        <h2>Weighted standings</h2>
+      </div>
+      <div className="leaderboard-list">
+        {rows.map((row, index) => (
+          <div className="leader-row" key={row.id}>
+            <span className="rank">#{index + 1}</span>
+            <TeamBadge player={row} />
+            <div>
+              <strong>{row.displayName}</strong>
+              <span>{row.dynastyTeam} · {row.correct}/{row.resolvedPicks} correct · {row.accuracy}%</span>
+            </div>
+            <strong>{row.points} pts</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AdminPanel({ state, setState }) {
+  const [draft, setDraft] = useState({ title: '', description: '', options: '', pointValue: 1 });
+  const [copyDraft, setCopyDraft] = useState(state.siteCopy);
+
+  function updateMarket(marketId, patch) {
+    setState((prev) => ({ ...prev, markets: prev.markets.map((market) => (market.id === marketId ? { ...market, ...patch } : market)) }));
+  }
+
+  function updateOptionLabel(marketId, optionId, label) {
+    setState((prev) => ({
+      ...prev,
+      markets: prev.markets.map((market) => {
+        if (market.id !== marketId) return market;
+        return {
+          ...market,
+          options: market.options.map((option) => (option.id === optionId ? { ...option, label } : option)),
+        };
+      }),
+    }));
+  }
+
+  function saveSiteCopy(event) {
+    event.preventDefault();
+    setState((prev) => ({ ...prev, siteCopy: { ...prev.siteCopy, ...copyDraft } }));
+  }
+
+  function createMarket(event) {
+    event.preventDefault();
+    const options = draft.options.split(',').map((item) => item.trim()).filter(Boolean);
+    if (!draft.title.trim() || options.length < 2) return;
+    const id = draft.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || crypto.randomUUID();
+    setState((prev) => ({
+      ...prev,
+      markets: [
+        ...prev.markets,
+        {
+          id,
+          title: draft.title.trim(),
+          description: draft.description.trim(),
+          status: 'open',
+          lockLabel: 'Kickoff',
+          pointValue: Number(draft.pointValue || 1),
+          options: options.map((label) => ({ id: `${id}-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, label })),
+          resolvedOptionId: null,
+        },
+      ],
+    }));
+    setDraft({ title: '', description: '', options: '', pointValue: 1 });
+  }
+
+  return (
+    <section className="panel admin-panel">
+      <div className="section-heading">
+        <p className="eyebrow">Commissioner Controls</p>
+        <h2>Admin console</h2>
+      </div>
+
+      <form className="admin-form copy-form" onSubmit={saveSiteCopy}>
+        <h3>Website text</h3>
+        <label>
+          Login eyebrow
+          <input value={copyDraft.loginEyebrow} onChange={(event) => setCopyDraft({ ...copyDraft, loginEyebrow: event.target.value })} />
+        </label>
+        <label>
+          Site title
+          <input value={copyDraft.siteTitle} onChange={(event) => setCopyDraft({ ...copyDraft, siteTitle: event.target.value })} />
+        </label>
+        <label>
+          Login intro
+          <textarea value={copyDraft.loginIntro} onChange={(event) => setCopyDraft({ ...copyDraft, loginIntro: event.target.value })} />
+        </label>
+        <label>
+          Hero eyebrow
+          <input value={copyDraft.heroEyebrow} onChange={(event) => setCopyDraft({ ...copyDraft, heroEyebrow: event.target.value })} />
+        </label>
+        <label>
+          Hero subtitle
+          <textarea value={copyDraft.heroSubtitle} onChange={(event) => setCopyDraft({ ...copyDraft, heroSubtitle: event.target.value })} />
+        </label>
+        <label>
+          Disclaimer
+          <textarea value={copyDraft.disclaimer} onChange={(event) => setCopyDraft({ ...copyDraft, disclaimer: event.target.value })} />
+        </label>
+        <button className="primary-btn">Save website text</button>
+      </form>
+
+      <form className="admin-form" onSubmit={createMarket}>
+        <h3>Create market</h3>
+        <input placeholder="Market title" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+        <input placeholder="Description" value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
+        <input placeholder="Options, comma separated" value={draft.options} onChange={(event) => setDraft({ ...draft, options: event.target.value })} />
+        <input type="number" min="1" placeholder="Point value" value={draft.pointValue} onChange={(event) => setDraft({ ...draft, pointValue: event.target.value })} />
+        <button className="primary-btn">Create market</button>
+      </form>
+      <div className="admin-market-list">
+        {state.markets.map((market) => (
+          <article className="admin-market" key={market.id}>
+            <div className="market-edit-grid">
+              <label>
+                Market title
+                <input value={market.title} onChange={(event) => updateMarket(market.id, { title: event.target.value })} />
+              </label>
+              <label>
+                Description
+                <textarea value={market.description} onChange={(event) => updateMarket(market.id, { description: event.target.value })} />
+              </label>
+              <label>
+                Lock label
+                <input value={market.lockLabel} onChange={(event) => updateMarket(market.id, { lockLabel: event.target.value })} />
+              </label>
+              <label>
+                Point value
+                <input type="number" min="1" value={market.pointValue} onChange={(event) => updateMarket(market.id, { pointValue: Number(event.target.value || 1) })} />
+              </label>
+              <div className="option-edit-list">
+                <strong>Options</strong>
+                {market.options.map((option) => (
+                  <input key={option.id} value={option.label} onChange={(event) => updateOptionLabel(market.id, option.id, event.target.value)} />
+                ))}
+              </div>
+            </div>
+            <div className="admin-actions">
+              <button disabled={market.status !== 'open'} onClick={() => updateMarket(market.id, { status: 'locked' })}>Lock</button>
+              <button disabled={market.status === 'open'} onClick={() => updateMarket(market.id, { status: 'open', resolvedOptionId: null })}>Reopen</button>
+              {market.options.map((option) => (
+                <button key={option.id} disabled={market.status === 'open'} onClick={() => updateMarket(market.id, { status: 'resolved', resolvedOptionId: option.id })}>
+                  Resolve: {option.label}
+                </button>
+              ))}
+              <button className="danger" onClick={() => setState((prev) => ({ ...prev, markets: prev.markets.filter((item) => item.id !== market.id), picks: prev.picks.filter((pick) => pick.marketId !== market.id) }))}>Delete</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState(getInitialPageFromHash());
-  const [user, setUser] = useState(null);
+  const [state, setStateValue] = useState(loadState);
+  const [playerId, setPlayerId] = useState(() => localStorage.getItem(SESSION_KEY) || '');
+  const [tab, setTab] = useState('markets');
+  const currentPlayer = state.players.find((player) => player.id === playerId);
 
-  const hasSupabaseConfig = useMemo(
-    () => Boolean(SUPABASE_URL && SUPABASE_ANON_KEY),
-    []
-  );
+  function setState(updater) {
+    setStateValue((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveState(next);
+      return next;
+    });
+  }
 
-  const handleNavigate = (page) => {
-    window.location.hash = page;
-    setCurrentPage(page);
-  };
+  function login(nextPlayerId) {
+    localStorage.setItem(SESSION_KEY, nextPlayerId);
+    setPlayerId(nextPlayerId);
+  }
 
-  const handleSignIn = (email) => {
-    // TODO: Replace with supabase.auth.signInWithOtp or preferred auth method.
-    setUser({ id: 'demo-user', email });
-  };
+  function signOut() {
+    localStorage.removeItem(SESSION_KEY);
+    setPlayerId('');
+  }
 
-  const handleSignOut = () => setUser(null);
+  function handlePick(marketId, optionId) {
+    setState((prev) => {
+      const market = prev.markets.find((item) => item.id === marketId);
+      if (!market || market.status !== 'open') return prev;
+      const remainingPicks = prev.picks.filter((pick) => !(pick.playerId === currentPlayer.id && pick.marketId === marketId));
+      return { ...prev, picks: [...remainingPicks, { playerId: currentPlayer.id, marketId, optionId, updatedAt: new Date().toISOString() }] };
+    });
+  }
+
+  const leaderboard = useMemo(() => calculateLeaderboard(state.players, state.markets, state.picks), [state]);
+  const groupedMarkets = useMemo(() => ({
+    open: state.markets.filter((market) => market.status === 'open'),
+    locked: state.markets.filter((market) => market.status === 'locked'),
+    resolved: state.markets.filter((market) => market.status === 'resolved'),
+  }), [state.markets]);
+
+  if (!currentPlayer) return <LoginScreen players={state.players} siteCopy={state.siteCopy} onLogin={login} />;
 
   return (
     <div className="app-shell">
-      <Header currentPage={currentPage} onNavigate={handleNavigate} user={user} onSignOut={handleSignOut} />
-
-      {!hasSupabaseConfig && (
-        <div className="env-warning">
-          Missing Supabase env vars. Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.
+      <header className="hero">
+        <div>
+          <p className="eyebrow">{state.siteCopy.heroEyebrow}</p>
+          <h1>{state.siteCopy.siteTitle}</h1>
+          <p>{state.siteCopy.heroSubtitle}</p>
         </div>
+        <div className="user-card">
+          <TeamBadge player={currentPlayer} />
+          <div>
+            <strong>{currentPlayer.displayName}</strong>
+            <span>{currentPlayer.dynastyTeam} · {currentPlayer.role}</span>
+          </div>
+          <button onClick={signOut}>Switch user</button>
+        </div>
+      </header>
+
+      <nav className="tabs">
+        <button className={tab === 'markets' ? 'active' : ''} onClick={() => setTab('markets')}>Markets</button>
+        <button className={tab === 'leaderboard' ? 'active' : ''} onClick={() => setTab('leaderboard')}>Leaderboard</button>
+        {currentPlayer.role === 'admin' && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Admin</button>}
+      </nav>
+
+      <p className="disclaimer">{state.siteCopy.disclaimer}</p>
+
+      {tab === 'markets' && (
+        <main className="market-sections">
+          {Object.entries(groupedMarkets).map(([status, markets]) => (
+            <section className="panel" key={status}>
+              <div className="section-heading">
+                <p className="eyebrow">{status}</p>
+                <h2>{status[0].toUpperCase() + status.slice(1)} markets</h2>
+              </div>
+              <div className="market-grid">
+                {markets.map((market) => <MarketCard key={market.id} market={market} picks={state.picks} players={state.players} currentPlayer={currentPlayer} onPick={handlePick} />)}
+              </div>
+              {markets.length === 0 && <p className="hint">No {status} markets yet.</p>}
+            </section>
+          ))}
+        </main>
       )}
 
-      <main className="main-layout">
-        <div className="content">
-          {currentPage === 'home' && <HomePage markets={markets} />}
-          {currentPage === 'leaderboard' && <LeaderboardPage leaderboard={leaderboard} />}
-          {currentPage === 'admin' && <AdminPage markets={markets} user={user} />}
-        </div>
-        <aside>
-          <AuthPanel user={user} onSignIn={handleSignIn} onSignOut={handleSignOut} />
-        </aside>
-      </main>
+      {tab === 'leaderboard' && <Leaderboard rows={leaderboard} />}
+      {tab === 'admin' && currentPlayer.role === 'admin' && <AdminPanel state={state} setState={setState} />}
     </div>
   );
 }
-main
-main
