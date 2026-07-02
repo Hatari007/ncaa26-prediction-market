@@ -8,6 +8,7 @@
  *      id: string,
  *      question: string,
  *      options: [{ id: string, label: string }],
+ *      pointValue?: number,
  *      resolvedOptionId?: string | null,
  *      resolvedAt?: string | Date | null
  *    }
@@ -46,11 +47,16 @@ function buildMarketLookup(markets) {
 
 /**
  * Sort helper for leaderboard tie-break rules:
- * 1) more correct picks
- * 2) better accuracy
- * 3) alphabetical display name
+ * 1) more weighted points
+ * 2) more correct picks
+ * 3) better accuracy
+ * 4) alphabetical display name
  */
 function compareLeaderboardRows(a, b) {
+  if (b.points !== a.points) {
+    return b.points - a.points;
+  }
+
   if (b.correctPicks !== a.correctPicks) {
     return b.correctPicks - a.correctPicks;
   }
@@ -68,7 +74,7 @@ function compareLeaderboardRows(a, b) {
  * Build leaderboard rows from raw picks.
  *
  * Only resolved markets are counted.
- * Each user gets 1 correct point when pick.optionId === market.resolvedOptionId.
+ * Each user gets market.pointValue points when pick.optionId === market.resolvedOptionId.
  */
 function buildLeaderboard(users, markets, picks) {
   const usersById = buildUserLookup(users);
@@ -81,6 +87,7 @@ function buildLeaderboard(users, markets, picks) {
       userId: user.id,
       displayName: user.displayName,
       correctPicks: 0,
+      points: 0,
       resolvedParticipated: 0,
       accuracy: 0,
     });
@@ -107,6 +114,7 @@ function buildLeaderboard(users, markets, picks) {
 
     if (pick.optionId === market.resolvedOptionId) {
       stats.correctPicks += 1;
+      stats.points += Number(market.pointValue || 1);
     }
   }
 
@@ -190,11 +198,10 @@ function buildLeaderboardReport(users, markets, picks, options = {}) {
   };
 }
 
-module.exports = {
+export {
   buildLeaderboard,
   buildRecentResults,
   buildLeaderboardReport,
-  // exported for direct testing
   compareLeaderboardRows,
   isResolvedMarket,
 };

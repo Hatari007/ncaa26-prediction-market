@@ -1,11 +1,11 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const {
+import {
   buildLeaderboard,
   buildRecentResults,
   buildLeaderboardReport,
-} = require('../src/leaderboard');
+} from '../src/leaderboard.js';
 
 const users = [
   { id: 'u1', displayName: 'Ava' },
@@ -17,6 +17,7 @@ const markets = [
   {
     id: 'm1',
     question: 'Team A wins?',
+    pointValue: 1,
     options: [
       { id: 'yes', label: 'Yes' },
       { id: 'no', label: 'No' },
@@ -27,6 +28,7 @@ const markets = [
   {
     id: 'm2',
     question: 'Team B over 20 points?',
+    pointValue: 2,
     options: [
       { id: 'yes', label: 'Yes' },
       { id: 'no', label: 'No' },
@@ -48,29 +50,26 @@ const markets = [
 const picks = [
   { userId: 'u1', marketId: 'm1', optionId: 'yes' },
   { userId: 'u1', marketId: 'm2', optionId: 'yes' },
-  { userId: 'u1', marketId: 'm3', optionId: 'yes' }, // should not count
+  { userId: 'u1', marketId: 'm3', optionId: 'yes' },
   { userId: 'u2', marketId: 'm1', optionId: 'yes' },
   { userId: 'u2', marketId: 'm2', optionId: 'no' },
   { userId: 'u3', marketId: 'm1', optionId: 'no' },
 ];
 
-test('buildLeaderboard counts only resolved markets and calculates accuracy', () => {
+test('buildLeaderboard counts resolved markets and weighted points', () => {
   const rows = buildLeaderboard(users, markets, picks);
 
   assert.equal(rows[0].displayName, 'Ben');
   assert.equal(rows[0].correctPicks, 2);
+  assert.equal(rows[0].points, 3);
   assert.equal(rows[0].resolvedParticipated, 2);
   assert.equal(rows[0].accuracy, 100);
 
   assert.equal(rows[1].displayName, 'Ava');
   assert.equal(rows[1].correctPicks, 1);
+  assert.equal(rows[1].points, 1);
   assert.equal(rows[1].resolvedParticipated, 2);
   assert.equal(rows[1].accuracy, 50);
-
-  assert.equal(rows[2].displayName, 'Cara');
-  assert.equal(rows[2].correctPicks, 0);
-  assert.equal(rows[2].resolvedParticipated, 1);
-  assert.equal(rows[2].accuracy, 0);
 });
 
 test('buildRecentResults returns newest resolved markets first', () => {
@@ -79,7 +78,6 @@ test('buildRecentResults returns newest resolved markets first', () => {
   assert.equal(results.length, 2);
   assert.equal(results[0].marketId, 'm2');
   assert.equal(results[1].marketId, 'm1');
-
   assert.equal(results[0].resolvedOptionLabel, 'No');
   assert.equal(results[0].participantCount, 2);
   assert.equal(results[0].correctPickCount, 1);

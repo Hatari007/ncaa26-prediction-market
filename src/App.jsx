@@ -123,6 +123,7 @@ function TeamBadge({ player }) {
 function LoginScreen({ players, onLogin }) {
   const [selected, setSelected] = useState(players[0]?.id || '');
 
+function Leaderboard({ rows }) {
   return (
     <main className="login-shell">
       <section className="login-card">
