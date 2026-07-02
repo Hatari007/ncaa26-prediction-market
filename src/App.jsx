@@ -1,18 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
 
-const STORAGE_KEY = 'wotwtc-state-v1';
 const SESSION_KEY = 'wotwtc-player-id';
-
-const playersSeed = [
-  { id: 'frank', displayName: 'Frank', dynastyTeam: 'Tennessee', role: 'admin', logo: 'T', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2633.png' },
-  { id: 'jeff', displayName: 'Jeff', dynastyTeam: 'Texas', role: 'user', logo: 'TX', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/251.png' },
-  { id: 'aus', displayName: 'Aus', dynastyTeam: 'Iowa', role: 'user', logo: 'IA', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2294.png' },
-  { id: 'matt', displayName: 'Matt', dynastyTeam: 'TCU', role: 'user', logo: 'TCU', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2628.png' },
-  { id: 'bryan', displayName: 'Bryan', dynastyTeam: 'Georgia Tech', role: 'user', logo: 'GT', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/59.png' },
-  { id: 'tom', displayName: 'Tom', dynastyTeam: 'Stanford', role: 'user', logo: 'S', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/24.png' },
-  { id: 'eric', displayName: 'Eric', dynastyTeam: 'Rice', role: 'user', logo: 'R', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/242.png' },
-  { id: 'mired', displayName: 'Mired', dynastyTeam: 'USC', role: 'user', logo: 'SC', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/30.png' },
-];
 
 const defaultSiteCopy = {
   loginEyebrow: 'NCAA 26 Dynasty Market',
@@ -23,81 +12,103 @@ const defaultSiteCopy = {
   disclaimer: 'Entertainment only. No real gambling, no money exchanged, no prizes beyond deeply annoying bragging rights.',
 };
 
-const marketsSeed = [
-  {
-    id: 'tcu-iowa',
-    title: 'Who will win TCU vs. Iowa?',
-    description: 'Semifinal pick. Locks at kickoff by commissioner button, not by a clock.',
-    status: 'open',
-    lockLabel: 'Kickoff',
-    pointValue: 1,
-    options: [
-      { id: 'tcu', label: 'TCU' },
-      { id: 'iowa', label: 'Iowa' },
-    ],
-    resolvedOptionId: null,
-  },
-  {
-    id: 'tennessee-texas',
-    title: 'Who will win Tennessee vs. Texas?',
-    description: 'Semifinal pick. Locks at kickoff by commissioner button, not by a clock.',
-    status: 'open',
-    lockLabel: 'Kickoff',
-    pointValue: 1,
-    options: [
-      { id: 'tennessee', label: 'Tennessee' },
-      { id: 'texas', label: 'Texas' },
-    ],
-    resolvedOptionId: null,
-  },
-  {
-    id: 'national-championship',
-    title: 'Who will win the National Championship?',
-    description: 'Pick the champion from the remaining field. Double points, double pressure.',
-    status: 'open',
-    lockLabel: 'Kickoff',
-    pointValue: 2,
-    options: [
-      { id: 'texas', label: 'Texas' },
-      { id: 'iowa', label: 'Iowa' },
-      { id: 'tennessee', label: 'Tennessee' },
-      { id: 'tcu', label: 'TCU' },
-    ],
-    resolvedOptionId: null,
-  },
-];
-
-function buildInitialState() {
-  return { players: playersSeed, markets: marketsSeed, picks: [], siteCopy: defaultSiteCopy };
-}
-
-function hydratePlayers(players = []) {
-  const seedById = new Map(playersSeed.map((player) => [player.id, player]));
-  return players.map((player) => ({ ...(seedById.get(player.id) ?? {}), ...player, logoUrl: player.logoUrl || seedById.get(player.id)?.logoUrl }));
-}
-
-function normalizeState(state) {
+function fromDbSiteCopy(row) {
+  if (!row) return defaultSiteCopy;
   return {
-    ...buildInitialState(),
-    ...state,
-    players: state?.players?.length ? hydratePlayers(state.players) : playersSeed,
-    markets: state?.markets?.length ? state.markets : marketsSeed,
-    picks: state?.picks ?? [],
-    siteCopy: { ...defaultSiteCopy, ...(state?.siteCopy ?? {}) },
+    loginEyebrow: row.login_eyebrow,
+    siteTitle: row.site_title,
+    loginIntro: row.login_intro,
+    heroEyebrow: row.hero_eyebrow,
+    heroSubtitle: row.hero_subtitle,
+    disclaimer: row.disclaimer,
   };
 }
 
-function loadState() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? normalizeState(JSON.parse(stored)) : buildInitialState();
-  } catch {
-    return buildInitialState();
-  }
+function toDbSiteCopy(copy) {
+  return {
+    id: 'default',
+    login_eyebrow: copy.loginEyebrow,
+    site_title: copy.siteTitle,
+    login_intro: copy.loginIntro,
+    hero_eyebrow: copy.heroEyebrow,
+    hero_subtitle: copy.heroSubtitle,
+    disclaimer: copy.disclaimer,
+    updated_at: new Date().toISOString(),
+  };
 }
 
-function saveState(nextState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+function fromDbPlayer(row) {
+  return {
+    id: row.id,
+    displayName: row.display_name,
+    dynastyTeam: row.dynasty_team,
+    role: row.role,
+    logo: row.logo,
+    logoUrl: row.logo_url,
+  };
+}
+
+function fromDbOption(row) {
+  return {
+    id: row.id,
+    marketId: row.market_id,
+    label: row.label,
+    sortOrder: row.sort_order,
+  };
+}
+
+function fromDbMarket(row, optionsByMarket) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    lockLabel: row.lock_label,
+    pointValue: row.point_value,
+    resolvedOptionId: row.resolved_option_id,
+    options: optionsByMarket.get(row.id) || [],
+  };
+}
+
+function fromDbPick(row) {
+  return {
+    id: row.id,
+    playerId: row.player_id,
+    marketId: row.market_id,
+    optionId: row.option_id,
+  };
+}
+
+function toSlug(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || crypto.randomUUID();
+}
+
+async function fetchSharedState() {
+  const [siteResult, playersResult, marketsResult, optionsResult, picksResult] = await Promise.all([
+    supabase.from('site_copy').select('*').eq('id', 'default').maybeSingle(),
+    supabase.from('players').select('*').order('created_at', { ascending: true }),
+    supabase.from('markets').select('*').order('created_at', { ascending: true }),
+    supabase.from('market_options').select('*').order('sort_order', { ascending: true }),
+    supabase.from('picks').select('*').order('created_at', { ascending: true }),
+  ]);
+
+  const firstError = siteResult.error || playersResult.error || marketsResult.error || optionsResult.error || picksResult.error;
+  if (firstError) throw firstError;
+
+  const optionsByMarket = new Map();
+  for (const option of optionsResult.data || []) {
+    const mapped = fromDbOption(option);
+    const current = optionsByMarket.get(mapped.marketId) || [];
+    current.push(mapped);
+    optionsByMarket.set(mapped.marketId, current);
+  }
+
+  return {
+    siteCopy: fromDbSiteCopy(siteResult.data),
+    players: (playersResult.data || []).map(fromDbPlayer),
+    markets: (marketsResult.data || []).map((market) => fromDbMarket(market, optionsByMarket)),
+    picks: (picksResult.data || []).map(fromDbPick),
+  };
 }
 
 function calculateLeaderboard(players, markets, picks) {
@@ -162,14 +173,14 @@ function LoginScreen({ players, siteCopy, onLogin }) {
             ))}
           </select>
         </label>
-        <button className="primary-btn" onClick={() => onLogin(selected)}>Enter the book</button>
+        <button className="primary-btn" onClick={() => onLogin(selected)} disabled={!selected}>Enter the book</button>
         <p className="fine-print">Entertainment only. Display-name login is intentionally casual for this private group.</p>
       </section>
     </main>
   );
 }
 
-function MarketCard({ market, picks, players, currentPlayer, onPick }) {
+function MarketCard({ market, picks, players, currentPlayer, onPick, busy }) {
   const userPick = picks.find((pick) => pick.marketId === market.id && pick.playerId === currentPlayer.id);
   const counts = getPickCounts(market, picks);
   const totalPicks = [...counts.values()].reduce((sum, value) => sum + value, 0);
@@ -201,7 +212,7 @@ function MarketCard({ market, picks, players, currentPlayer, onPick }) {
             <button
               key={option.id}
               className={`option-btn ${selected ? 'selected' : ''} ${winner ? 'winner' : ''}`}
-              disabled={market.status !== 'open'}
+              disabled={market.status !== 'open' || busy}
               onClick={() => onPick(market.id, option.id)}
             >
               <span className="option-main">
@@ -244,53 +255,70 @@ function Leaderboard({ rows }) {
   );
 }
 
-function AdminPanel({ state, setState }) {
+function AdminPanel({ state, runAction }) {
   const [draft, setDraft] = useState({ title: '', description: '', options: '', pointValue: 1 });
   const [copyDraft, setCopyDraft] = useState(state.siteCopy);
 
-  function updateMarket(marketId, patch) {
-    setState((prev) => ({ ...prev, markets: prev.markets.map((market) => (market.id === marketId ? { ...market, ...patch } : market)) }));
+  async function updateMarket(marketId, patch) {
+    const dbPatch = {};
+    if ('title' in patch) dbPatch.title = patch.title;
+    if ('description' in patch) dbPatch.description = patch.description;
+    if ('lockLabel' in patch) dbPatch.lock_label = patch.lockLabel;
+    if ('pointValue' in patch) dbPatch.point_value = patch.pointValue;
+    if ('status' in patch) dbPatch.status = patch.status;
+    if ('resolvedOptionId' in patch) dbPatch.resolved_option_id = patch.resolvedOptionId;
+    dbPatch.updated_at = new Date().toISOString();
+
+    await runAction(async () => {
+      const { error } = await supabase.from('markets').update(dbPatch).eq('id', marketId);
+      if (error) throw error;
+    });
   }
 
-  function updateOptionLabel(marketId, optionId, label) {
-    setState((prev) => ({
-      ...prev,
-      markets: prev.markets.map((market) => {
-        if (market.id !== marketId) return market;
-        return {
-          ...market,
-          options: market.options.map((option) => (option.id === optionId ? { ...option, label } : option)),
-        };
-      }),
-    }));
+  async function updateOptionLabel(optionId, label) {
+    await runAction(async () => {
+      const { error } = await supabase.from('market_options').update({ label }).eq('id', optionId);
+      if (error) throw error;
+    });
   }
 
-  function saveSiteCopy(event) {
+  async function saveSiteCopy(event) {
     event.preventDefault();
-    setState((prev) => ({ ...prev, siteCopy: { ...prev.siteCopy, ...copyDraft } }));
+    await runAction(async () => {
+      const { error } = await supabase.from('site_copy').upsert(toDbSiteCopy(copyDraft));
+      if (error) throw error;
+    });
   }
 
-  function createMarket(event) {
+  async function createMarket(event) {
     event.preventDefault();
     const options = draft.options.split(',').map((item) => item.trim()).filter(Boolean);
     if (!draft.title.trim() || options.length < 2) return;
-    const id = draft.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || crypto.randomUUID();
-    setState((prev) => ({
-      ...prev,
-      markets: [
-        ...prev.markets,
-        {
-          id,
-          title: draft.title.trim(),
-          description: draft.description.trim(),
-          status: 'open',
-          lockLabel: 'Kickoff',
-          pointValue: Number(draft.pointValue || 1),
-          options: options.map((label) => ({ id: `${id}-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, label })),
-          resolvedOptionId: null,
-        },
-      ],
-    }));
+    const id = toSlug(draft.title);
+
+    await runAction(async () => {
+      const { error: marketError } = await supabase.from('markets').insert({
+        id,
+        title: draft.title.trim(),
+        description: draft.description.trim(),
+        status: 'open',
+        lock_label: 'Kickoff',
+        point_value: Number(draft.pointValue || 1),
+        resolved_option_id: null,
+      });
+      if (marketError) throw marketError;
+
+      const { error: optionsError } = await supabase.from('market_options').insert(
+        options.map((label, index) => ({
+          id: `${id}-${toSlug(label)}`,
+          market_id: id,
+          label,
+          sort_order: index + 1,
+        })),
+      );
+      if (optionsError) throw optionsError;
+    });
+
     setDraft({ title: '', description: '', options: '', pointValue: 1 });
   }
 
@@ -361,7 +389,7 @@ function AdminPanel({ state, setState }) {
               <div className="option-edit-list">
                 <strong>Options</strong>
                 {market.options.map((option) => (
-                  <input key={option.id} value={option.label} onChange={(event) => updateOptionLabel(market.id, option.id, event.target.value)} />
+                  <input key={option.id} value={option.label} onChange={(event) => updateOptionLabel(option.id, event.target.value)} />
                 ))}
               </div>
             </div>
@@ -373,7 +401,15 @@ function AdminPanel({ state, setState }) {
                   Resolve: {option.label}
                 </button>
               ))}
-              <button className="danger" onClick={() => setState((prev) => ({ ...prev, markets: prev.markets.filter((item) => item.id !== market.id), picks: prev.picks.filter((pick) => pick.marketId !== market.id) }))}>Delete</button>
+              <button
+                className="danger"
+                onClick={() => runAction(async () => {
+                  const { error } = await supabase.from('markets').delete().eq('id', market.id);
+                  if (error) throw error;
+                })}
+              >
+                Delete
+              </button>
             </div>
           </article>
         ))}
@@ -383,17 +419,50 @@ function AdminPanel({ state, setState }) {
 }
 
 export default function App() {
-  const [state, setStateValue] = useState(loadState);
+  const [state, setState] = useState({ players: [], markets: [], picks: [], siteCopy: defaultSiteCopy });
   const [playerId, setPlayerId] = useState(() => localStorage.getItem(SESSION_KEY) || '');
   const [tab, setTab] = useState('markets');
-  const currentPlayer = state.players.find((player) => player.id === playerId);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
-  function setState(updater) {
-    setStateValue((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      saveState(next);
-      return next;
-    });
+  async function reload() {
+    if (!isSupabaseConfigured) {
+      setError('Missing Supabase environment variables. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in GitHub secrets.');
+      setLoading(false);
+      return;
+    }
+
+    setError('');
+    try {
+      const nextState = await fetchSharedState();
+      setState(nextState);
+      if (playerId && !nextState.players.some((player) => player.id === playerId)) {
+        localStorage.removeItem(SESSION_KEY);
+        setPlayerId('');
+      }
+    } catch (e) {
+      setError(e.message || 'Could not load shared markets.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    reload();
+  }, []);
+
+  async function runAction(action) {
+    setBusy(true);
+    setError('');
+    try {
+      await action();
+      await reload();
+    } catch (e) {
+      setError(e.message || 'Action failed.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   function login(nextPlayerId) {
@@ -406,21 +475,45 @@ export default function App() {
     setPlayerId('');
   }
 
-  function handlePick(marketId, optionId) {
-    setState((prev) => {
-      const market = prev.markets.find((item) => item.id === marketId);
-      if (!market || market.status !== 'open') return prev;
-      const remainingPicks = prev.picks.filter((pick) => !(pick.playerId === currentPlayer.id && pick.marketId === marketId));
-      return { ...prev, picks: [...remainingPicks, { playerId: currentPlayer.id, marketId, optionId, updatedAt: new Date().toISOString() }] };
+  async function handlePick(marketId, optionId) {
+    const currentPlayer = state.players.find((player) => player.id === playerId);
+    if (!currentPlayer) return;
+
+    await runAction(async () => {
+      const { error: pickError } = await supabase.from('picks').upsert(
+        {
+          player_id: currentPlayer.id,
+          market_id: marketId,
+          option_id: optionId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'player_id,market_id' },
+      );
+      if (pickError) throw pickError;
     });
   }
 
+  const currentPlayer = state.players.find((player) => player.id === playerId);
   const leaderboard = useMemo(() => calculateLeaderboard(state.players, state.markets, state.picks), [state]);
   const groupedMarkets = useMemo(() => ({
     open: state.markets.filter((market) => market.status === 'open'),
     locked: state.markets.filter((market) => market.status === 'locked'),
     resolved: state.markets.filter((market) => market.status === 'resolved'),
   }), [state.markets]);
+
+  if (loading) return <div className="login-shell"><section className="login-card">Loading shared markets...</section></div>;
+
+  if (!isSupabaseConfigured) {
+    return (
+      <main className="login-shell">
+        <section className="login-card">
+          <p className="eyebrow">Setup needed</p>
+          <h1>Supabase is not configured</h1>
+          <p className="hero-copy">Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY as GitHub Actions secrets, then redeploy.</p>
+        </section>
+      </main>
+    );
+  }
 
   if (!currentPlayer) return <LoginScreen players={state.players} siteCopy={state.siteCopy} onLogin={login} />;
 
@@ -446,9 +539,11 @@ export default function App() {
         <button className={tab === 'markets' ? 'active' : ''} onClick={() => setTab('markets')}>Markets</button>
         <button className={tab === 'leaderboard' ? 'active' : ''} onClick={() => setTab('leaderboard')}>Leaderboard</button>
         {currentPlayer.role === 'admin' && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Admin</button>}
+        <button onClick={reload} disabled={busy}>Refresh</button>
       </nav>
 
       <p className="disclaimer">{state.siteCopy.disclaimer}</p>
+      {error && <p className="disclaimer">⚠️ {error}</p>}
 
       {tab === 'markets' && (
         <main className="market-sections">
@@ -459,7 +554,7 @@ export default function App() {
                 <h2>{status[0].toUpperCase() + status.slice(1)} markets</h2>
               </div>
               <div className="market-grid">
-                {markets.map((market) => <MarketCard key={market.id} market={market} picks={state.picks} players={state.players} currentPlayer={currentPlayer} onPick={handlePick} />)}
+                {markets.map((market) => <MarketCard key={market.id} market={market} picks={state.picks} players={state.players} currentPlayer={currentPlayer} onPick={handlePick} busy={busy} />)}
               </div>
               {markets.length === 0 && <p className="hint">No {status} markets yet.</p>}
             </section>
@@ -468,7 +563,7 @@ export default function App() {
       )}
 
       {tab === 'leaderboard' && <Leaderboard rows={leaderboard} />}
-      {tab === 'admin' && currentPlayer.role === 'admin' && <AdminPanel state={state} setState={setState} />}
+      {tab === 'admin' && currentPlayer.role === 'admin' && <AdminPanel state={state} runAction={runAction} />}
     </div>
   );
 }
