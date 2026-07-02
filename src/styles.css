@@ -8,7 +8,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top left, #3d2410 0, #13161f 38%, #07080c 100%); }
-button, input, select, textarea { font: inherit; }
+button, input, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: 0.55; }
 
@@ -27,8 +27,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .eyebrow { margin: 0; color: #ffd36a; text-transform: uppercase; letter-spacing: 0.18em; font-size: 0.76rem; font-weight: 800; }
 .hero-copy { font-size: 1.1rem; }
 label { display: grid; gap: 0.45rem; color: #f6e4bd; font-weight: 700; }
-select, input, textarea { width: 100%; border: 1px solid rgba(255, 211, 106, 0.35); background: #121722; color: #fff8e7; border-radius: 14px; padding: 0.85rem 1rem; }
-textarea { min-height: 92px; resize: vertical; }
+select, input { width: 100%; border: 1px solid rgba(255, 211, 106, 0.35); background: #121722; color: #fff8e7; border-radius: 14px; padding: 0.85rem 1rem; }
 .primary-btn, .tabs button, .user-card button, .admin-actions button, .option-btn {
   border: 1px solid rgba(255, 211, 106, 0.32);
   background: rgba(255, 211, 106, 0.09);
@@ -44,8 +43,7 @@ button:not(:disabled):hover { transform: translateY(-1px); border-color: #ffd36a
 .user-card { padding: 0.9rem; display: flex; gap: 0.8rem; align-items: center; min-width: 310px; }
 .user-card div { display: grid; gap: 0.1rem; flex: 1; }
 .user-card span, .leader-row span, .admin-market span { color: #c9baa2; font-size: 0.9rem; }
-.team-badge { width: 52px; height: 52px; border-radius: 16px; display: inline-grid; place-items: center; font-weight: 950; color: #221305; background: rgba(255,255,255,0.92); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.32); overflow: hidden; }
-.team-badge img { width: 84%; height: 84%; object-fit: contain; display: block; }
+.team-badge { width: 48px; height: 48px; border-radius: 16px; display: inline-grid; place-items: center; font-weight: 950; color: #221305; background: linear-gradient(135deg, #fff5c7, #d8a337); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.32); }
 .tabs { display: flex; gap: 0.65rem; margin: 1rem 0; flex-wrap: wrap; }
 .tabs button.active { background: #ffd36a; color: #1d1005; font-weight: 900; }
 .market-sections { display: grid; gap: 1rem; padding-bottom: 3rem; }
@@ -59,9 +57,7 @@ button:not(:disabled):hover { transform: translateY(-1px); border-color: #ffd36a
 .market-topline, .market-meta { display: flex; justify-content: space-between; gap: 1rem; color: #d6c39c; font-size: 0.88rem; }
 .status-pill { text-transform: uppercase; color: #090b10; background: #ffd36a; border-radius: 999px; padding: 0.2rem 0.55rem; font-weight: 900; }
 .option-stack { display: grid; gap: 0.65rem; }
-.option-btn { width: 100%; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; gap: 1rem; text-align: left; }
-.option-main { display: grid; gap: 0.25rem; }
-.option-main small { color: #c9baa2; line-height: 1.35; }
+.option-btn { width: 100%; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; text-align: left; }
 .option-btn.selected { background: rgba(64, 214, 146, 0.15); border-color: #40d692; }
 .option-btn.winner { background: rgba(255, 211, 106, 0.2); border-color: #ffd36a; }
 .winner-line { color: #ffd36a !important; font-weight: 900; }
@@ -69,12 +65,9 @@ button:not(:disabled):hover { transform: translateY(-1px); border-color: #ffd36a
 .leader-row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 0.75rem; padding: 0.8rem; border-radius: 18px; background: rgba(255,255,255,0.045); }
 .rank { color: #ffd36a !important; font-weight: 900; }
 .admin-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
-.admin-form h3, .copy-form h3 { grid-column: 1 / -1; margin: 0.25rem 0; }
-.copy-form { border-bottom: 1px solid rgba(255, 215, 128, 0.18); padding-bottom: 1rem; }
 .admin-form .primary-btn { margin: 0; }
 .admin-market { padding: 1rem; display: grid; gap: 0.8rem; }
-.market-edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
-.option-edit-list { display: grid; gap: 0.5rem; }
+.admin-market > div:first-child { display: grid; gap: 0.15rem; }
 .admin-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .admin-actions .danger { border-color: rgba(255, 98, 98, 0.5); color: #ffb4b4; }
 
@@ -82,7 +75,7 @@ button:not(:disabled):hover { transform: translateY(-1px); border-color: #ffd36a
   .hero { align-items: stretch; }
   .hero, .section-heading { flex-direction: column; }
   .user-card { min-width: 0; width: 100%; flex-wrap: wrap; }
-  .admin-form, .market-edit-grid { grid-template-columns: 1fr; }
+  .admin-form { grid-template-columns: 1fr; }
   .leader-row { grid-template-columns: auto auto 1fr; }
   .leader-row > strong:last-child { grid-column: 1 / -1; }
 }

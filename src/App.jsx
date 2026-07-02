@@ -4,24 +4,15 @@ const STORAGE_KEY = 'wotwtc-state-v1';
 const SESSION_KEY = 'wotwtc-player-id';
 
 const playersSeed = [
-  { id: 'frank', displayName: 'Frank', dynastyTeam: 'Tennessee', role: 'admin', logo: 'T', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2633.png' },
-  { id: 'jeff', displayName: 'Jeff', dynastyTeam: 'Texas', role: 'user', logo: 'TX', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/251.png' },
-  { id: 'aus', displayName: 'Aus', dynastyTeam: 'Iowa', role: 'user', logo: 'IA', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2294.png' },
-  { id: 'matt', displayName: 'Matt', dynastyTeam: 'TCU', role: 'user', logo: 'TCU', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/2628.png' },
-  { id: 'bryan', displayName: 'Bryan', dynastyTeam: 'Georgia Tech', role: 'user', logo: 'GT', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/59.png' },
-  { id: 'tom', displayName: 'Tom', dynastyTeam: 'Stanford', role: 'user', logo: 'S', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/24.png' },
-  { id: 'eric', displayName: 'Eric', dynastyTeam: 'Rice', role: 'user', logo: 'R', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/242.png' },
-  { id: 'mired', displayName: 'Mired', dynastyTeam: 'USC', role: 'user', logo: 'SC', logoUrl: 'https://a.espncdn.com/i/teamlogos/ncaa/500/30.png' },
+  { id: 'frank', displayName: 'Frank', dynastyTeam: 'Tennessee', role: 'admin', logo: 'T' },
+  { id: 'jeff', displayName: 'Jeff', dynastyTeam: 'Texas', role: 'user', logo: 'TX' },
+  { id: 'aus', displayName: 'Aus', dynastyTeam: 'Iowa', role: 'user', logo: 'IA' },
+  { id: 'matt', displayName: 'Matt', dynastyTeam: 'TCU', role: 'user', logo: 'TCU' },
+  { id: 'bryan', displayName: 'Bryan', dynastyTeam: 'Georgia Tech', role: 'user', logo: 'GT' },
+  { id: 'tom', displayName: 'Tom', dynastyTeam: 'Stanford', role: 'user', logo: 'S' },
+  { id: 'eric', displayName: 'Eric', dynastyTeam: 'Rice', role: 'user', logo: 'R' },
+  { id: 'mired', displayName: 'Mired', dynastyTeam: 'USC', role: 'user', logo: 'SC' },
 ];
-
-const defaultSiteCopy = {
-  loginEyebrow: 'NCAA 26 Dynasty Market',
-  siteTitle: 'Waiting on the World to Change',
-  loginIntro: 'Fake odds, real bragging rights. No money, no payouts, no bookie — just your friends being confidently wrong.',
-  heroEyebrow: 'No-cash sportsbook parody',
-  heroSubtitle: 'Private NCAA dynasty markets. Fake odds. Real group-chat receipts.',
-  disclaimer: 'Entertainment only. No real gambling, no money exchanged, no prizes beyond deeply annoying bragging rights.',
-};
 
 const marketsSeed = [
   {
@@ -68,29 +59,13 @@ const marketsSeed = [
 ];
 
 function buildInitialState() {
-  return { players: playersSeed, markets: marketsSeed, picks: [], siteCopy: defaultSiteCopy };
-}
-
-function hydratePlayers(players = []) {
-  const seedById = new Map(playersSeed.map((player) => [player.id, player]));
-  return players.map((player) => ({ ...(seedById.get(player.id) ?? {}), ...player, logoUrl: player.logoUrl || seedById.get(player.id)?.logoUrl }));
-}
-
-function normalizeState(state) {
-  return {
-    ...buildInitialState(),
-    ...state,
-    players: state?.players?.length ? hydratePlayers(state.players) : playersSeed,
-    markets: state?.markets?.length ? state.markets : marketsSeed,
-    picks: state?.picks ?? [],
-    siteCopy: { ...defaultSiteCopy, ...(state?.siteCopy ?? {}) },
-  };
+  return { players: playersSeed, markets: marketsSeed, picks: [] };
 }
 
 function loadState() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? normalizeState(JSON.parse(stored)) : buildInitialState();
+    return stored ? JSON.parse(stored) : buildInitialState();
   } catch {
     return buildInitialState();
   }
@@ -139,21 +114,22 @@ function getPickCounts(market, picks) {
 
 function TeamBadge({ player }) {
   return (
-    <span className="team-badge" title={`${player.dynastyTeam} logo`}>
-      {player.logoUrl ? <img src={player.logoUrl} alt={`${player.dynastyTeam} logo`} loading="lazy" /> : player.logo}
+    <span className="team-badge" title={`${player.dynastyTeam} dynasty logo placeholder`}>
+      {player.logo}
     </span>
   );
 }
 
-function LoginScreen({ players, siteCopy, onLogin }) {
+function LoginScreen({ players, onLogin }) {
   const [selected, setSelected] = useState(players[0]?.id || '');
 
+function Leaderboard({ rows }) {
   return (
     <main className="login-shell">
       <section className="login-card">
-        <p className="eyebrow">{siteCopy.loginEyebrow}</p>
-        <h1>{siteCopy.siteTitle}</h1>
-        <p className="hero-copy">{siteCopy.loginIntro}</p>
+        <p className="eyebrow">NCAA 26 Dynasty Market</p>
+        <h1>Waiting on the World to Change</h1>
+        <p className="hero-copy">Fake odds, real bragging rights. No money, no payouts, no bookie — just your friends being confidently wrong.</p>
         <label>
           Choose your display name
           <select value={selected} onChange={(event) => setSelected(event.target.value)}>
@@ -169,12 +145,11 @@ function LoginScreen({ players, siteCopy, onLogin }) {
   );
 }
 
-function MarketCard({ market, picks, players, currentPlayer, onPick }) {
+function MarketCard({ market, picks, currentPlayer, onPick }) {
   const userPick = picks.find((pick) => pick.marketId === market.id && pick.playerId === currentPlayer.id);
   const counts = getPickCounts(market, picks);
   const totalPicks = [...counts.values()].reduce((sum, value) => sum + value, 0);
   const showPublicPicks = market.status !== 'open';
-  const playerById = new Map(players.map((player) => [player.id, player]));
 
   return (
     <article className={`market-card market-${market.status}`}>
@@ -194,9 +169,6 @@ function MarketCard({ market, picks, players, currentPlayer, onPick }) {
           const percent = totalPicks ? Math.round((count / totalPicks) * 100) : 0;
           const selected = userPick?.optionId === option.id;
           const winner = market.resolvedOptionId === option.id;
-          const optionPickers = picks
-            .filter((pick) => pick.marketId === market.id && pick.optionId === option.id)
-            .map((pick) => playerById.get(pick.playerId)?.displayName || 'Unknown');
           return (
             <button
               key={option.id}
@@ -204,20 +176,23 @@ function MarketCard({ market, picks, players, currentPlayer, onPick }) {
               disabled={market.status !== 'open'}
               onClick={() => onPick(market.id, option.id)}
             >
-              <span className="option-main">
-                <span>{option.label}</span>
-                {showPublicPicks && <small>{optionPickers.length ? optionPickers.join(', ') : 'No picks'}</small>}
-              </span>
+              <span>{option.label}</span>
               {showPublicPicks ? <span>{count} · {percent}%</span> : <span>{selected ? 'Your pick' : 'Pick'}</span>}
             </button>
           );
         })}
       </div>
       {market.status === 'open' && userPick && <p className="hint">You can change this pick until Frank locks the market.</p>}
-      {market.status === 'locked' && <p className="hint">Picks are public now that the market is locked.</p>}
+      {market.status === 'locked' && <PublicPicks market={market} picks={picks} />}
       {market.status === 'resolved' && <p className="winner-line">Winner: {market.options.find((option) => option.id === market.resolvedOptionId)?.label}</p>}
     </article>
   );
+}
+
+function PublicPicks({ market, picks }) {
+  const marketPicks = picks.filter((pick) => pick.marketId === market.id);
+  if (marketPicks.length === 0) return <p className="hint">No picks were submitted before lock.</p>;
+  return <p className="hint">Picks are public now that the market is locked.</p>;
 }
 
 function Leaderboard({ rows }) {
@@ -246,28 +221,9 @@ function Leaderboard({ rows }) {
 
 function AdminPanel({ state, setState }) {
   const [draft, setDraft] = useState({ title: '', description: '', options: '', pointValue: 1 });
-  const [copyDraft, setCopyDraft] = useState(state.siteCopy);
 
   function updateMarket(marketId, patch) {
     setState((prev) => ({ ...prev, markets: prev.markets.map((market) => (market.id === marketId ? { ...market, ...patch } : market)) }));
-  }
-
-  function updateOptionLabel(marketId, optionId, label) {
-    setState((prev) => ({
-      ...prev,
-      markets: prev.markets.map((market) => {
-        if (market.id !== marketId) return market;
-        return {
-          ...market,
-          options: market.options.map((option) => (option.id === optionId ? { ...option, label } : option)),
-        };
-      }),
-    }));
-  }
-
-  function saveSiteCopy(event) {
-    event.preventDefault();
-    setState((prev) => ({ ...prev, siteCopy: { ...prev.siteCopy, ...copyDraft } }));
   }
 
   function createMarket(event) {
@@ -300,38 +256,7 @@ function AdminPanel({ state, setState }) {
         <p className="eyebrow">Commissioner Controls</p>
         <h2>Admin console</h2>
       </div>
-
-      <form className="admin-form copy-form" onSubmit={saveSiteCopy}>
-        <h3>Website text</h3>
-        <label>
-          Login eyebrow
-          <input value={copyDraft.loginEyebrow} onChange={(event) => setCopyDraft({ ...copyDraft, loginEyebrow: event.target.value })} />
-        </label>
-        <label>
-          Site title
-          <input value={copyDraft.siteTitle} onChange={(event) => setCopyDraft({ ...copyDraft, siteTitle: event.target.value })} />
-        </label>
-        <label>
-          Login intro
-          <textarea value={copyDraft.loginIntro} onChange={(event) => setCopyDraft({ ...copyDraft, loginIntro: event.target.value })} />
-        </label>
-        <label>
-          Hero eyebrow
-          <input value={copyDraft.heroEyebrow} onChange={(event) => setCopyDraft({ ...copyDraft, heroEyebrow: event.target.value })} />
-        </label>
-        <label>
-          Hero subtitle
-          <textarea value={copyDraft.heroSubtitle} onChange={(event) => setCopyDraft({ ...copyDraft, heroSubtitle: event.target.value })} />
-        </label>
-        <label>
-          Disclaimer
-          <textarea value={copyDraft.disclaimer} onChange={(event) => setCopyDraft({ ...copyDraft, disclaimer: event.target.value })} />
-        </label>
-        <button className="primary-btn">Save website text</button>
-      </form>
-
       <form className="admin-form" onSubmit={createMarket}>
-        <h3>Create market</h3>
         <input placeholder="Market title" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
         <input placeholder="Description" value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
         <input placeholder="Options, comma separated" value={draft.options} onChange={(event) => setDraft({ ...draft, options: event.target.value })} />
@@ -341,29 +266,9 @@ function AdminPanel({ state, setState }) {
       <div className="admin-market-list">
         {state.markets.map((market) => (
           <article className="admin-market" key={market.id}>
-            <div className="market-edit-grid">
-              <label>
-                Market title
-                <input value={market.title} onChange={(event) => updateMarket(market.id, { title: event.target.value })} />
-              </label>
-              <label>
-                Description
-                <textarea value={market.description} onChange={(event) => updateMarket(market.id, { description: event.target.value })} />
-              </label>
-              <label>
-                Lock label
-                <input value={market.lockLabel} onChange={(event) => updateMarket(market.id, { lockLabel: event.target.value })} />
-              </label>
-              <label>
-                Point value
-                <input type="number" min="1" value={market.pointValue} onChange={(event) => updateMarket(market.id, { pointValue: Number(event.target.value || 1) })} />
-              </label>
-              <div className="option-edit-list">
-                <strong>Options</strong>
-                {market.options.map((option) => (
-                  <input key={option.id} value={option.label} onChange={(event) => updateOptionLabel(market.id, option.id, event.target.value)} />
-                ))}
-              </div>
+            <div>
+              <strong>{market.title}</strong>
+              <span>{market.status} · {market.pointValue} pt{market.pointValue === 1 ? '' : 's'}</span>
             </div>
             <div className="admin-actions">
               <button disabled={market.status !== 'open'} onClick={() => updateMarket(market.id, { status: 'locked' })}>Lock</button>
@@ -422,15 +327,15 @@ export default function App() {
     resolved: state.markets.filter((market) => market.status === 'resolved'),
   }), [state.markets]);
 
-  if (!currentPlayer) return <LoginScreen players={state.players} siteCopy={state.siteCopy} onLogin={login} />;
+  if (!currentPlayer) return <LoginScreen players={state.players} onLogin={login} />;
 
   return (
     <div className="app-shell">
       <header className="hero">
         <div>
-          <p className="eyebrow">{state.siteCopy.heroEyebrow}</p>
-          <h1>{state.siteCopy.siteTitle}</h1>
-          <p>{state.siteCopy.heroSubtitle}</p>
+          <p className="eyebrow">No-cash sportsbook parody</p>
+          <h1>Waiting on the World to Change</h1>
+          <p>Private NCAA dynasty markets. Fake odds. Real group-chat receipts.</p>
         </div>
         <div className="user-card">
           <TeamBadge player={currentPlayer} />
@@ -448,7 +353,7 @@ export default function App() {
         {currentPlayer.role === 'admin' && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Admin</button>}
       </nav>
 
-      <p className="disclaimer">{state.siteCopy.disclaimer}</p>
+      <p className="disclaimer">Entertainment only. No real gambling, no money exchanged, no prizes beyond deeply annoying bragging rights.</p>
 
       {tab === 'markets' && (
         <main className="market-sections">
@@ -459,7 +364,7 @@ export default function App() {
                 <h2>{status[0].toUpperCase() + status.slice(1)} markets</h2>
               </div>
               <div className="market-grid">
-                {markets.map((market) => <MarketCard key={market.id} market={market} picks={state.picks} players={state.players} currentPlayer={currentPlayer} onPick={handlePick} />)}
+                {markets.map((market) => <MarketCard key={market.id} market={market} picks={state.picks} currentPlayer={currentPlayer} onPick={handlePick} />)}
               </div>
               {markets.length === 0 && <p className="hint">No {status} markets yet.</p>}
             </section>
